@@ -5,57 +5,56 @@ import assert from 'assert';
 dotenv.config();
 
 async function runTests() {
-  console.log("🧪 Starting automated tests...");
+  console.log("🧪 开始自动化测试...");
 
   const agent = mastra.getAgent("ragAgent");
-  if (!agent) throw new Error("Agent not found");
+  if (!agent) throw new Error("找不到 Agent");
 
-  // Test Case 1: Retrieval Accuracy
-  // We expect the agent to know about Mastra based on the ingested document
-  const query1 = "What are the core components of Mastra?";
-  console.log(`\n📝 Test Case 1: Querying "${query1}"`);
+  // 测试用例 1: 检索准确性
+  // 我们期望 Agent 基于入库文档知道什么是 Mastra
+  const query1 = "Mastra 的核心组件有哪些?";
+  console.log(`\n📝 测试用例 1: 提问 "${query1}"`);
   
   try {
     const response = await agent.generate(query1);
     const text = response.text.toLowerCase();
     
-    console.log("Response:", response.text);
+    console.log("回答:", response.text);
 
-    // Assertions
-    const keywords = ["agents", "workflows", "rag"];
+    // 断言
+    const keywords = ["agents", "workflows", "rag", "智能体", "工作流"];
     const found = keywords.filter(k => text.includes(k));
     
     if (found.length >= 2) {
-      console.log("✅ Test Case 1 Passed: Found expected keywords.");
+      console.log("✅ 测试用例 1 通过: 包含预期的关键词。");
     } else {
-      console.error("❌ Test Case 1 Failed: Missing expected keywords.");
+      console.error("❌ 测试用例 1 失败: 缺少预期的关键词。");
       process.exit(1);
     }
   } catch (error) {
-    console.error("❌ Test Case 1 Error:", error);
+    console.error("❌ 测试用例 1 错误:", error);
     process.exit(1);
   }
 
-  // Test Case 2: Hallucination Check / Out of domain
-  // This is harder to assert deterministically without a known 'I don't know' response pattern,
-  // but we configured the agent to say "I don't have enough information".
-  const query2 = "What is the capital of Mars?";
-  console.log(`\n📝 Test Case 2: Querying "${query2}" (Out of domain)`);
+  // 测试用例 2: 幻觉检查 / 域外问题
+  // 我们配置了 Agent 在不知道答案时说 "没有足够的信息"
+  const query2 = "火星的首都是哪里?";
+  console.log(`\n📝 测试用例 2: 提问 "${query2}" (域外问题)`);
 
   try {
     const response = await agent.generate(query2);
-    console.log("Response:", response.text);
+    console.log("回答:", response.text);
     
-    if (response.text.includes("don't have enough information") || response.text.includes("context")) {
-      console.log("✅ Test Case 2 Passed: Agent admitted lack of knowledge.");
+    if (response.text.includes("没有足够的信息") || response.text.includes("context") || response.text.includes("knowledge base")) {
+      console.log("✅ 测试用例 2 通过: Agent 承认知识不足。");
     } else {
-      console.warn("⚠️ Test Case 2 Warning: Agent might have hallucinated or used general knowledge.");
+      console.warn("⚠️ 测试用例 2 警告: Agent 可能产生了幻觉或使用了通用知识。");
     }
   } catch (error) {
-    console.error("❌ Test Case 2 Error:", error);
+    console.error("❌ 测试用例 2 错误:", error);
   }
 
-  console.log("\n🎉 All tests completed.");
+  console.log("\n🎉 所有测试完成。");
 }
 
 runTests().catch(console.error);

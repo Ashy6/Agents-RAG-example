@@ -5,64 +5,59 @@ import { libSqlVector } from "../mastra/index";
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import OpenAI from "openai";
 
 dotenv.config();
 
 async function ingest() {
-  // Validate Environment Variables
+  // 校验环境变量
   if (!process.env.VOLCENGINE_API_KEY) {
-    console.error("❌ Error: VOLCENGINE_API_KEY is missing in .env file.");
+    console.error("❌ 错误: .env 文件中缺少 VOLCENGINE_API_KEY。");
     process.exit(1);
   }
   if (!process.env.VOLCENGINE_EMBEDDING_MODEL || process.env.VOLCENGINE_EMBEDDING_MODEL.includes('ep-20250106xxxxxx-xxxxx')) {
-     console.error("❌ Error: Invalid VOLCENGINE_EMBEDDING_MODEL in .env file.");
-     console.error("👉 Please replace the placeholder with your actual Endpoint ID.");
+     console.error("❌ 错误: .env 文件中 VOLCENGINE_EMBEDDING_MODEL 无效。");
+     console.error("👉 请将占位符替换为您实际的接入点 ID (Endpoint ID)。");
      process.exit(1);
   }
 
-  // Setup Volcengine Provider
-  const volcengine = createOpenAI({
-    baseURL: process.env.VOLCENGINE_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
-    apiKey: process.env.VOLCENGINE_API_KEY,
-  });
-  
   const EMBEDDING_MODEL = process.env.VOLCENGINE_EMBEDDING_MODEL;
 
-  console.log("🚀 Starting ingestion process...");
+  console.log("🚀 开始数据入库流程...");
 
-  // 1. Create a sample document (or read from file)
+  // 1. 创建示例文档 (或从文件读取)
   const docPath = path.join(__dirname, "../../data/sample.md");
   
   if (!fs.existsSync(path.dirname(docPath))) {
     fs.mkdirSync(path.dirname(docPath), { recursive: true });
     const sampleContent = `
-# Mastra Framework Guide
+# Mastra 框架指南
 
-Mastra is a TypeScript-first AI framework designed to simplify the development of AI agents and RAG systems.
+Mastra 是一个 TypeScript 优先的 AI 框架，旨在简化 AI Agent 和 RAG 系统的开发。
 
-## Core Components
-1. **Agents**: Autonomous entities that can use tools and LLMs.
-2. **Workflows**: Graph-based orchestration of tasks.
-3. **RAG**: Retrieval-Augmented Generation for grounding AI in data.
+## 核心组件
+1. **Agents (智能体)**: 能够使用工具和 LLM 的自主实体。
+2. **Workflows (工作流)**: 基于图的任务编排。
+3. **RAG (检索增强生成)**: 用于将 AI 基于数据落地的技术。
 
-## RAG Process
-To implement RAG in Mastra, you need to:
-- Create an MDocument from text.
-- Chunk the document using strategies like recursive splitting.
-- Generate embeddings using OpenAI or other providers.
-- Store vectors in LibSQL or PgVector.
+## RAG 流程
+要在 Mastra 中实现 RAG，你需要:
+- 从文本创建 MDocument。
+- 使用递归分割等策略对文档进行切片 (Chunking)。
+- 使用 OpenAI 或其他提供商生成 Embedding (向量)。
+- 将向量存储在 LibSQL 或 PgVector 中。
 
-## Benefits
-Mastra provides type safety, easy integration with Vercel AI SDK, and robust observability.
+## 优势
+Mastra 提供类型安全、与 Vercel AI SDK 的轻松集成以及强大的可观测性。
     `;
     fs.writeFileSync(docPath, sampleContent);
-    console.log("📝 Created sample document at data/sample.md");
+    console.log("📝 已在 data/sample.md 创建示例文档");
   }
 
   const fileContent = fs.readFileSync(docPath, "utf-8");
 
-  // 2. Create MDocument and Chunk
-  console.log("✂️  Chunking document...");
+  // 2. 创建 MDocument 并切片
+  console.log("✂️  正在对文档进行切片...");
   const doc = MDocument.fromText(fileContent);
   
   const chunks = await doc.chunk({
@@ -71,32 +66,49 @@ Mastra provides type safety, easy integration with Vercel AI SDK, and robust obs
     overlap: 50,
   });
   
-  console.log(`ℹ️  Generated ${chunks.length} chunks.`);
+  console.log(`ℹ️  生成了 ${chunks.length} 个切片。`);
 
-  // 3. Generate Embeddings
-  console.log(`🧠 Generating embeddings using ${EMBEDDING_MODEL}...`);
-  const { embeddings } = await embedMany({
-    model: volcengine.embedding(EMBEDDING_MODEL),
-    values: chunks.map((c) => c.text),
+  // 3. 生成 Embeddings
+  console.log(`🧠 正在使用 ${EMBEDDING_MODEL} 生成向量...`);
+  
+  // 注意：使用原生 OpenAI SDK 是因为 AI SDK 的 createOpenAI 可能会注入不兼容的参数
+  // 或包含与火山引擎特定要求冲突的模型名称验证逻辑。
+  
+  // --- 火山引擎配置 (Volcengine) ---
+  const openai = new OpenAI({
+    apiKey: process.env.VOLCENGINE_API_KEY,
+    baseURL: process.env.VOLCENGINE_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
+  });
+  // -----------------------------
+
+  // --- OpenAI 配置 (已注释，待接入 Key 后启用) ---
+  // const openai = new OpenAI({
+  //   apiKey: process.env.OPENAI_API_KEY, // 确保 .env 中有 OPENAI_API_KEY
+  // });
+  // -----------------------------
+
+  const embeddingResponse = await openai.embeddings.create({
+    model: EMBEDDING_MODEL,
+    input: chunks.map((c) => c.text),
+    encoding_format: "float",
   });
 
-  // 4. Store in LibSQL
-  console.log("💾 Storing in LibSQL...");
+  const embeddings = embeddingResponse.data.map(d => d.embedding);
+
+  // 4. 存储到 LibSQL
+  console.log("💾 正在存储到 LibSQL...");
   
-  // Create index if not exists
-  // Note: Doubao embedding dimension varies. 
-  // doubao-embedding-text-240715 is usually 1024 or 1536 depending on config.
-  // We'll assume 1536 for now, but user might need to adjust.
-  // Standard OpenAI is 1536. Doubao can be 1024.
-  // Let's default to 1536 but warn user.
-  const dimension = 1536; 
+  // 如果索引不存在则创建
+  // 动态获取 Embedding 维度，避免模型切换导致维度不匹配
+  const dimension = embeddings.length > 0 ? embeddings[0].length : 1536;
+  console.log(`ℹ️  检测到向量维度: ${dimension}`);
 
   await libSqlVector.createIndex({
     indexName: "embeddings",
     dimension: dimension 
   });
 
-  // Upsert vectors
+  // 更新或插入向量
   await libSqlVector.upsert({
     indexName: "embeddings",
     vectors: embeddings,
@@ -107,10 +119,10 @@ Mastra provides type safety, easy integration with Vercel AI SDK, and robust obs
     })),
   });
 
-  console.log("✅ Ingestion complete!");
+  console.log("✅ 入库完成!");
 }
 
 ingest().catch((err) => {
-  console.error("❌ Ingestion failed:", err);
+  console.error("❌ 入库失败:", err);
   process.exit(1);
 });
