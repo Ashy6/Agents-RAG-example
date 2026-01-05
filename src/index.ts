@@ -5,7 +5,7 @@ async function main() {
   console.log(`\n🤖 用户提问: ${query}\n`);
 
   const agent = mastra.getAgent("ragAgent");
-  
+
   if (!agent) {
     console.error("找不到 Agent!");
     return;
