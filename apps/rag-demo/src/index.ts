@@ -13,9 +13,12 @@ async function main() {
 
   try {
     console.log("思考中...");
-    const response = await agent.generate(query);
+    const streamResult = await agent.streamLegacy(query);
     console.log("\n💡 Agent 回答:");
-    console.log(response.text);
+    for await (const chunk of streamResult.textStream) {
+      process.stdout.write(chunk);
+    }
+    console.log("\n  streamResult:", streamResult.text);
   } catch (error) {
     console.error("生成回答时出错:", error);
   }

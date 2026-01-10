@@ -27,7 +27,7 @@ async function ingest() {
   console.log("🚀 开始数据入库流程...");
 
   // 1. 创建示例文档 (或从文件读取)
-  const docPath = path.join(__dirname, "../../data/sample.md");
+  const docPath = path.join(__dirname, "../data/sample.md");
   const docDir = path.dirname(docPath);
 
   if (!fs.existsSync(docDir)) {
