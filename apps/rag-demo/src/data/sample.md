@@ -12,6 +12,7 @@ Mastra 是一个用于构建 AI 应用程序的 TypeScript 框架。它提供以
 2. **Mastra RAG**: 用于文档处理、切片和向量化的专用工具。
 3. **Mastra PG**: 使用 pgvector 的 PostgreSQL 向量存储集成。
 4. **Mastra OpenAI**: 集成 OpenAI 的 LLM 模型。
+5. **Mastra Workflows**: 用于编排和管理工作流的组件。
 
 ## RAG 在 Mastra 中如何工作
 
