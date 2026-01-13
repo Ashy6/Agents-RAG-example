@@ -1,16 +1,16 @@
-# mastra-rag-demo
+# rag-example
 
 一个包含 3 个子项目的 RAG 示例仓库：Mastra 版本、LangChain 版本，以及面向复用的 LangChain RAG SDK + 测试/服务端 Playground。
 
 ## 1. 项目说明文件
 
-下表列出本仓库最常用的 3 份核心文档（技术 / API / 部署），并给出位置与用途说明（含版本信息、维护者与最后更新时间）。
+下表列出本仓库最常用的 3 份核心文档，并说明文件与用途。
 
-| 文档类型 | 位置                                                                                  | 用途                                                                                                                          | 版本  | 维护者 | 最后更新时间 |
-| -------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----- | ------ | ------------ |
-| 技术文档 | [apps/langchain-rag/RAG_FLOW.md](./apps/langchain-rag/RAG_FLOW.md)                    | 说明 LangChain 版本 RAG 的入库与检索问答全流程、关键组件与数据流向，便于理解整体链路与排查检索/生成问题。                     | 0.1.0 | Ashy6  | 2026-01-14   |
-| API 文档 | [rag.controller.ts](./apps/langchain-sdk/nest-test/src/modules/rag/rag.controller.ts) | Nest 服务端对外接口的“事实标准”，包含路由/入参/返回结构等实现细节，用于联调与定位接口行为差异。                               | 0.1.0 | Ashy6  | 2026-01-14   |
-| 部署文档 | [apps/rag-demo/docker-compose.yml](./apps/rag-demo/docker-compose.yml)                | Mastra Demo 的容器编排入口文件；结合 [.env.example](./apps/rag-demo/.env.example) 可在一致环境下启动/验证依赖服务与运行参数。 | 0.1.0 | Ashy6  | 2026-01-14   |
+| 文档类型 | 文件 | 作用 |
+| --- | --- | --- |
+| 技术文档 | [apps/langchain-rag/RAG_FLOW.md](./apps/langchain-rag/RAG_FLOW.md) | LangChain 版本 RAG 的流程说明（入库/检索/生成/关键组件对照）。 |
+| API 文档 | [apps/langchain-sdk/nest-test/src/modules/rag/rag.controller.ts](./apps/langchain-sdk/nest-test/src/modules/rag/rag.controller.ts) | Nest 服务端 RAG 接口实现（路由/入参/返回结构）。 |
+| 部署文档 | [apps/rag-demo/docker-compose.yml](./apps/rag-demo/docker-compose.yml) | Mastra Demo 的部署编排入口（配合环境变量启动依赖与服务）。 |
 
 ## 2. 项目核心作用
 
