@@ -1,0 +1,9 @@
+{
+  "name": "langchain-sdk-playground",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build:sdk": "npm run build --workspaces=false --prefix sdk"
+  },
+  "dependencies": {}
+}

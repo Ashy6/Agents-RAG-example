@@ -1,1 +1,170 @@
-[["0",{"pageContent":"# LangChain 深度指南：构建下一代 LLM 应用的终极框架\n\n## 1. 什么是 LangChain？\n\nLangChain 是一个用于开发由语言模型（LLMs）驱动的应用程序的开源框架。它不仅仅是一个 API 包装器，更是一个能够让 LLM 具备**感知能力**（与上下文交互）和**代理能力**（采取行动）的强大工具库。\n\n自 2022 年底发布以来，LangChain 迅速成为了构建生成式 AI 应用的事实标准。它解决了直接使用 LLM API（如 OpenAI GPT-4、Anthropic Claude、火山引擎 Doubao）时的诸多痛点，例如：\n\n- **上下文管理**：处理超过 Token 限制的长文档。\n- **结构化输出**：强制模型返回 JSON 或特定格式的数据。\n- **外部数据连接**：让模型访问私有数据库、API 或文件系统。\n- **决策制定**：让模型根据输入自主决定调用哪些工具。\n\n---\n\n## 2. 核心价值主张\n\nLangChain 的核心价值在于**组件化**和**编排**。","metadata":{"loc":{"lines":{"from":1,"to":18}}}}],["1",{"pageContent":"## 2. 核心价值主张\n\nLangChain 的核心价值在于**组件化**和**编排**。\n\n- **组件化 (Components)**：LangChain 提供了模块化的构建块，如 Prompt Templates、Models、Indexes 等。这些组件设计抽象，易于替换和扩展。无论你使用的是 OpenAI、HuggingFace 还是本地模型，代码逻辑基本保持一致。\n- **编排 (Chains & LCEL)**：LangChain 提供了将这些组件串联起来的“链”（Chains），以及更现代的 LangChain Expression Language (LCEL)，支持构建复杂的、多步骤的 AI 逻辑流程。\n\n---\n\n## 3. 六大核心模块详解\n\nLangChain 将 LLM 应用开发拆解为六大核心模块，每个模块解决一类特定问题：\n\n### 3.1 Model I/O (模型输入/输出)","metadata":{"loc":{"lines":{"from":16,"to":29}}}}],["2",{"pageContent":"### 3.1 Model I/O (模型输入/输出)\n\n这是与 LLM 交互的基础层。\n- **Prompts (提示词)**：管理提示词模板（Prompt Templates），支持动态参数注入。例如，创建一个“翻译助手”模板，只需传入待翻译文本即可。\n- **Language Models (语言模型)**：\n  - **LLMs**：输入文本，输出文本（如 text-davinci-003）。\n  - **Chat Models**：输入消息列表（System, Human, AI），输出 AI 消息（如 gpt-4, doubao-pro）。\n- **Output Parsers (输出解析器)**：将模型的非结构化文本输出转换为结构化数据（如 JSON、List、Date）。这对于编程交互至关重要。\n\n### 3.2 Retrieval (检索 - RAG 的核心)","metadata":{"loc":{"lines":{"from":29,"to":38}}}}],["3",{"pageContent":"检索增强生成（RAG）是 LangChain 最流行的应用场景。它允许模型基于私有数据回答问题。\n- **Document Loaders (文档加载器)**：从各种来源加载数据，支持 PDF、Markdown、HTML、CSV、S3、Notion 等 100+ 种数据源。\n- **Text Splitters (文本分割器)**：将长文档切分为适合模型上下文窗口的小片段（Chunks）。支持按字符、Token 或代码语法（Python/JS）分割。\n- **Text Embedding Models (文本嵌入模型)**：将文本转换为向量（数字列表），捕捉文本的语义含义。\n- **Vector Stores (向量数据库)**：存储和索引向量数据，支持语义搜索。LangChain 支持 Pinecone、Chroma、Milvus、Faiss、LibSQL 等 50+ 种向量库。\n- **Retrievers (检索器)**：定义如何检索相关文档的算法，如语义搜索、多重查询（MultiQuery）、上下文压缩（Contextual Compression）等。\n\n### 3.3 Chains (链)","metadata":{"loc":{"lines":{"from":40,"to":47}}}}],["4",{"pageContent":"### 3.3 Chains (链)\n\n链是 LangChain 的胶水，将 LLM 与其他组件连接起来。\n- **简单链 (LLMChain)**：Prompt + LLM。\n- **顺序链 (SequentialChain)**：将一个链的输出作为下一个链的输入。\n- **路由链 (RouterChain)**：根据用户输入动态选择处理链（例如，将数学问题路由到数学链，物理问题路由到物理链）。\n- **文档处理链**：如 MapReduce、Refine、MapRerank，用于处理超长文档的总结或问答。\n\n### 3.4 Memory (记忆)","metadata":{"loc":{"lines":{"from":47,"to":55}}}}],["5",{"pageContent":"### 3.4 Memory (记忆)\n\nLLM 本身是无状态的。Memory 模块让应用能够“记住”之前的对话。\n- **ConversationBufferMemory**：完整存储所有对话历史。\n- **ConversationBufferWindowMemory**：只保留最近 K 轮对话。\n- **ConversationSummaryMemory**：使用 LLM 实时总结之前的对话，节省 Token。\n- **EntityMemory**：自动提取和记忆对话中的特定实体（如人名、地点）。\n\n### 3.5 Agents (智能体)","metadata":{"loc":{"lines":{"from":55,"to":63}}}}],["6",{"pageContent":"### 3.5 Agents (智能体)\n\n在 Chain 中，执行序列是硬编码的。而在 Agent 中，LLM 充当推理引擎，自主决定执行什么操作以及以什么顺序执行。\n- **Tools (工具)**：Agent 可以调用的功能，如 Google Search、Calculator、Python Interpreter、SQL Database 查询等。\n- **Toolkits (工具包)**：特定任务的工具集合，如 Pandas DataFrame 工具包、Jira 工具包。\n- **Agent Types**：\n  - **Zero-shot ReAct**：基于 ReAct 论文，推理并行动。\n  - **OpenAI Functions**：利用 OpenAI 模型的函数调用能力，更稳定。\n  - **Plan-and-Execute**：先规划步骤，再逐一执行。\n\n### 3.6 Callbacks (回调)\n\n提供了一个钩子系统，用于记录日志、监控、流式传输输出等。LangSmith 就是基于此构建的。\n\n---","metadata":{"loc":{"lines":{"from":63,"to":77}}}}],["7",{"pageContent":"---\n\n## 4. LangChain Expression Language (LCEL)\n\nLCEL 是 LangChain 0.1.0 版本后推出的声明式编程方式，旨在简化复杂链的构建。它使用 Linux 管道风格的语法 `|`。\n\n**优势**：\n\n1. **流式支持 (Streaming)**：所有使用 LCEL 构建的链自动支持流式输出，首个 Token 生成时间 (TTFT) 极短。\n2. **异步支持 (Async)**：天然支持异步调用，适合高并发 Web 服务。\n3. **并行执行 (Parallelism)**：自动并行处理无依赖的步骤，减少延迟。\n4. **可观测性**：每一步都自动记录到 LangSmith。\n\n**示例**：","metadata":{"loc":{"lines":{"from":77,"to":90}}}}],["8",{"pageContent":"**示例**：\n\n```typescript\n// 定义一个 RAG 链\nconst chain = RunnableSequence.from([\n  {\n    context: retriever.pipe(formatDocumentsAsString),\n    question: new RunnablePassthrough()\n  },\n  prompt,\n  model,\n  new StringOutputParser()\n]);\n\n// 调用\nconst result = await chain.invoke(\"LangChain 是什么？\");\n```\n\n---\n\n## 5. 进阶生态：LangGraph 与 LangSmith\n\n随着 AI 应用越来越复杂，仅靠 LangChain 的 DAG（有向无环图）结构已不足以描述复杂的循环逻辑（如多智能体协作、循环重试）。\n\n### 5.1 LangGraph","metadata":{"loc":{"lines":{"from":90,"to":114}}}}],["9",{"pageContent":"### 5.1 LangGraph\n\nLangGraph 是 LangChain 的扩展，用于构建**有状态的、多角色的应用程序**。\n- 它将工作流建模为图（Graph），支持**循环（Cycles）**。\n- 这是构建类似于 AutoGPT、BabyAGI 等高级 Agent 的基础。\n- 核心概念：State（状态）、Nodes（节点）、Edges（边）。\n\n### 5.2 LangSmith\n\nLangSmith 是一个用于调试、测试、评估和监控 LLM 应用程序的统一平台。\n- **Tracing**：可视化查看链中每一步的输入、输出、耗时和 Token 消耗。\n- **Evaluation**：对 RAG 系统进行自动化评估（准确性、相关性）。\n- **Hub**：管理和版本化 Prompt。\n\n---\n\n## 6. 典型应用场景实战\n\n### 场景一：私有知识库问答 (RAG)\n\n这是企业最常见的需求。","metadata":{"loc":{"lines":{"from":114,"to":134}}}}],["10",{"pageContent":"### 场景一：私有知识库问答 (RAG)\n\n这是企业最常见的需求。\n\n1. **Ingestion**：读取 PDF/Wiki -> 切片 -> 向量化 -> 存入 VectorDB。\n2. **Retrieval**：用户提问 -> 向量化 -> 在 VectorDB 中查找相似片段。\n3. **Generation**：将片段 + 问题填入 Prompt -> LLM 生成答案。\n\n### 场景二：SQL 数据查询助手\n\n让非技术人员用自然语言查询数据库。\n\n1. **Schema 提取**：Agent 获取数据库表结构。\n2. **Query 生成**：LLM 将自然语言转为 SQL。\n3. **执行与解释**：执行 SQL，并将结果转换回自然语言。\n\n### 场景三：自动化执行智能体\n\n例如，一个“市场分析师” Agent。","metadata":{"loc":{"lines":{"from":132,"to":150}}}}],["11",{"pageContent":"### 场景三：自动化执行智能体\n\n例如，一个“市场分析师” Agent。\n\n1. **任务**：“分析 2024 年 AI 行业趋势并写一份报告。”\n2. **行动**：\n    - 调用 `Google Search` 搜索新闻。\n    - 调用 `Web Scraper` 读取文章内容。\n    - 调用 `LLM` 总结关键点。\n    - 调用 `File System` 写入 `report.md`。\n\n---\n\n## 7. 总结\n\nLangChain 正在重新定义软件开发。它不再是编写确定的逻辑（if/else），而是编写**提示**、**工具**和**工作流**，让概率性的 AI 模型能够可靠地解决现实世界的问题。无论你是想构建一个简单的聊天机器人，还是一个复杂的企业级 AI 操作系统，LangChain 都是目前最完善、最强大的基石。","metadata":{"loc":{"lines":{"from":148,"to":163}}}}]]
+[
+    [
+        "0",
+        {
+            "pageContent": "# LangChain 深度指南：构建下一代 LLM 应用的终极框架\n\n## 1. 什么是 LangChain？\n\nLangChain 是一个用于开发由语言模型（LLMs）驱动的应用程序的开源框架。它不仅仅是一个 API 包装器，更是一个能够让 LLM 具备**感知能力**（与上下文交互）和**代理能力**（采取行动）的强大工具库。\n\n自 2022 年底发布以来，LangChain 迅速成为了构建生成式 AI 应用的事实标准。它解决了直接使用 LLM API（如 OpenAI GPT-4、Anthropic Claude、火山引擎 Doubao）时的诸多痛点，例如：\n\n- **上下文管理**：处理超过 Token 限制的长文档。\n- **结构化输出**：强制模型返回 JSON 或特定格式的数据。\n- **外部数据连接**：让模型访问私有数据库、API 或文件系统。\n- **决策制定**：让模型根据输入自主决定调用哪些工具。\n\n---\n\n## 2. 核心价值主张\n\nLangChain 的核心价值在于**组件化**和**编排**。",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 1,
+                        "to": 18
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "1",
+        {
+            "pageContent": "## 2. 核心价值主张\n\nLangChain 的核心价值在于**组件化**和**编排**。\n\n- **组件化 (Components)**：LangChain 提供了模块化的构建块，如 Prompt Templates、Models、Indexes 等。这些组件设计抽象，易于替换和扩展。无论你使用的是 OpenAI、HuggingFace 还是本地模型，代码逻辑基本保持一致。\n- **编排 (Chains & LCEL)**：LangChain 提供了将这些组件串联起来的“链”（Chains），以及更现代的 LangChain Expression Language (LCEL)，支持构建复杂的、多步骤的 AI 逻辑流程。\n\n---\n\n## 3. 六大核心模块详解\n\nLangChain 将 LLM 应用开发拆解为六大核心模块，每个模块解决一类特定问题：\n\n### 3.1 Model I/O (模型输入/输出)",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 16,
+                        "to": 29
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "2",
+        {
+            "pageContent": "### 3.1 Model I/O (模型输入/输出)\n\n这是与 LLM 交互的基础层。\n- **Prompts (提示词)**：管理提示词模板（Prompt Templates），支持动态参数注入。例如，创建一个“翻译助手”模板，只需传入待翻译文本即可。\n- **Language Models (语言模型)**：\n  - **LLMs**：输入文本，输出文本（如 text-davinci-003）。\n  - **Chat Models**：输入消息列表（System, Human, AI），输出 AI 消息（如 gpt-4, doubao-pro）。\n- **Output Parsers (输出解析器)**：将模型的非结构化文本输出转换为结构化数据（如 JSON、List、Date）。这对于编程交互至关重要。\n\n### 3.2 Retrieval (检索 - RAG 的核心)",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 29,
+                        "to": 38
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "3",
+        {
+            "pageContent": "检索增强生成（RAG）是 LangChain 最流行的应用场景。它允许模型基于私有数据回答问题。\n- **Document Loaders (文档加载器)**：从各种来源加载数据，支持 PDF、Markdown、HTML、CSV、S3、Notion 等 100+ 种数据源。\n- **Text Splitters (文本分割器)**：将长文档切分为适合模型上下文窗口的小片段（Chunks）。支持按字符、Token 或代码语法（Python/JS）分割。\n- **Text Embedding Models (文本嵌入模型)**：将文本转换为向量（数字列表），捕捉文本的语义含义。\n- **Vector Stores (向量数据库)**：存储和索引向量数据，支持语义搜索。LangChain 支持 Pinecone、Chroma、Milvus、Faiss、LibSQL 等 50+ 种向量库。\n- **Retrievers (检索器)**：定义如何检索相关文档的算法，如语义搜索、多重查询（MultiQuery）、上下文压缩（Contextual Compression）等。\n\n### 3.3 Chains (链)",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 40,
+                        "to": 47
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "4",
+        {
+            "pageContent": "### 3.3 Chains (链)\n\n链是 LangChain 的胶水，将 LLM 与其他组件连接起来。\n- **简单链 (LLMChain)**：Prompt + LLM。\n- **顺序链 (SequentialChain)**：将一个链的输出作为下一个链的输入。\n- **路由链 (RouterChain)**：根据用户输入动态选择处理链（例如，将数学问题路由到数学链，物理问题路由到物理链）。\n- **文档处理链**：如 MapReduce、Refine、MapRerank，用于处理超长文档的总结或问答。\n\n### 3.4 Memory (记忆)",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 47,
+                        "to": 55
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "5",
+        {
+            "pageContent": "### 3.4 Memory (记忆)\n\nLLM 本身是无状态的。Memory 模块让应用能够“记住”之前的对话。\n- **ConversationBufferMemory**：完整存储所有对话历史。\n- **ConversationBufferWindowMemory**：只保留最近 K 轮对话。\n- **ConversationSummaryMemory**：使用 LLM 实时总结之前的对话，节省 Token。\n- **EntityMemory**：自动提取和记忆对话中的特定实体（如人名、地点）。\n\n### 3.5 Agents (智能体)",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 55,
+                        "to": 63
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "6",
+        {
+            "pageContent": "### 3.5 Agents (智能体)\n\n在 Chain 中，执行序列是硬编码的。而在 Agent 中，LLM 充当推理引擎，自主决定执行什么操作以及以什么顺序执行。\n- **Tools (工具)**：Agent 可以调用的功能，如 Google Search、Calculator、Python Interpreter、SQL Database 查询等。\n- **Toolkits (工具包)**：特定任务的工具集合，如 Pandas DataFrame 工具包、Jira 工具包。\n- **Agent Types**：\n  - **Zero-shot ReAct**：基于 ReAct 论文，推理并行动。\n  - **OpenAI Functions**：利用 OpenAI 模型的函数调用能力，更稳定。\n  - **Plan-and-Execute**：先规划步骤，再逐一执行。\n\n### 3.6 Callbacks (回调)\n\n提供了一个钩子系统，用于记录日志、监控、流式传输输出等。LangSmith 就是基于此构建的。\n\n---",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 63,
+                        "to": 77
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "7",
+        {
+            "pageContent": "---\n\n## 4. LangChain Expression Language (LCEL)\n\nLCEL 是 LangChain 0.1.0 版本后推出的声明式编程方式，旨在简化复杂链的构建。它使用 Linux 管道风格的语法 `|`。\n\n**优势**：\n\n1. **流式支持 (Streaming)**：所有使用 LCEL 构建的链自动支持流式输出，首个 Token 生成时间 (TTFT) 极短。\n2. **异步支持 (Async)**：天然支持异步调用，适合高并发 Web 服务。\n3. **并行执行 (Parallelism)**：自动并行处理无依赖的步骤，减少延迟。\n4. **可观测性**：每一步都自动记录到 LangSmith。\n\n**示例**：",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 77,
+                        "to": 90
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "8",
+        {
+            "pageContent": "**示例**：\n\n```typescript\n// 定义一个 RAG 链\nconst chain = RunnableSequence.from([\n  {\n    context: retriever.pipe(formatDocumentsAsString),\n    question: new RunnablePassthrough()\n  },\n  prompt,\n  model,\n  new StringOutputParser()\n]);\n\n// 调用\nconst result = await chain.invoke(\"LangChain 是什么？\");\n```\n\n---\n\n## 5. 进阶生态：LangGraph 与 LangSmith\n\n随着 AI 应用越来越复杂，仅靠 LangChain 的 DAG（有向无环图）结构已不足以描述复杂的循环逻辑（如多智能体协作、循环重试）。\n\n### 5.1 LangGraph",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 90,
+                        "to": 114
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "9",
+        {
+            "pageContent": "### 5.1 LangGraph\n\nLangGraph 是 LangChain 的扩展，用于构建**有状态的、多角色的应用程序**。\n- 它将工作流建模为图（Graph），支持**循环（Cycles）**。\n- 这是构建类似于 AutoGPT、BabyAGI 等高级 Agent 的基础。\n- 核心概念：State（状态）、Nodes（节点）、Edges（边）。\n\n### 5.2 LangSmith\n\nLangSmith 是一个用于调试、测试、评估和监控 LLM 应用程序的统一平台。\n- **Tracing**：可视化查看链中每一步的输入、输出、耗时和 Token 消耗。\n- **Evaluation**：对 RAG 系统进行自动化评估（准确性、相关性）。\n- **Hub**：管理和版本化 Prompt。\n\n---\n\n## 6. 典型应用场景实战\n\n### 场景一：私有知识库问答 (RAG)\n\n这是企业最常见的需求。",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 114,
+                        "to": 134
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "10",
+        {
+            "pageContent": "### 场景一：私有知识库问答 (RAG)\n\n这是企业最常见的需求。\n\n1. **Ingestion**：读取 PDF/Wiki -> 切片 -> 向量化 -> 存入 VectorDB。\n2. **Retrieval**：用户提问 -> 向量化 -> 在 VectorDB 中查找相似片段。\n3. **Generation**：将片段 + 问题填入 Prompt -> LLM 生成答案。\n\n### 场景二：SQL 数据查询助手\n\n让非技术人员用自然语言查询数据库。\n\n1. **Schema 提取**：Agent 获取数据库表结构。\n2. **Query 生成**：LLM 将自然语言转为 SQL。\n3. **执行与解释**：执行 SQL，并将结果转换回自然语言。\n\n### 场景三：自动化执行智能体\n\n例如，一个“市场分析师” Agent。",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 132,
+                        "to": 150
+                    }
+                }
+            }
+        }
+    ],
+    [
+        "11",
+        {
+            "pageContent": "### 场景三：自动化执行智能体\n\n例如，一个“市场分析师” Agent。\n\n1. **任务**：“分析 2024 年 AI 行业趋势并写一份报告。”\n2. **行动**：\n    - 调用 `Google Search` 搜索新闻。\n    - 调用 `Web Scraper` 读取文章内容。\n    - 调用 `LLM` 总结关键点。\n    - 调用 `File System` 写入 `report.md`。\n\n---\n\n## 7. 总结\n\nLangChain 正在重新定义软件开发。它不再是编写确定的逻辑（if/else），而是编写**提示**、**工具**和**工作流**，让概率性的 AI 模型能够可靠地解决现实世界的问题。无论你是想构建一个简单的聊天机器人，还是一个复杂的企业级 AI 操作系统，LangChain 都是目前最完善、最强大的基石。",
+            "metadata": {
+                "loc": {
+                    "lines": {
+                        "from": 148,
+                        "to": 163
+                    }
+                }
+            }
+        }
+    ]
+]
