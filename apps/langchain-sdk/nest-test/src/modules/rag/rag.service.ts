@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Injectable, OnModuleInit } from "@nestjs/common";
-import { RagClient } from "rag";
+import { RagClient } from "@singulay/rag-sdk";
 
 @Injectable()
 export class RagService implements OnModuleInit {
