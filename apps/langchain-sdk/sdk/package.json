@@ -1,14 +1,17 @@
 {
-  "name": "rag",
+  "name": "@singulay/rag-sdk",
   "version": "0.1.0",
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "dotenv": "^16.4.5"
@@ -18,4 +21,3 @@
     "typescript": "^5.3.3"
   }
 }
-
