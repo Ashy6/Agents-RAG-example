@@ -31,6 +31,11 @@ export type RagClientOptions = {
   chatModel: string;
   embeddingModel: string;
   vectorStorePath?: string;
+  vectorStoreStorage?: {
+    get(key: string): Promise<string | null>;
+    put(key: string, value: string): Promise<void>;
+    delete?(key: string): Promise<void>;
+  };
   chunkSize?: number;
   chunkOverlap?: number;
   mock?: boolean;

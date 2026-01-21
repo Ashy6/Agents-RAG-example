@@ -37,6 +37,12 @@ export class RagService implements OnModuleInit {
     return this.storePath;
   }
 
+  private resetVectorStoreFile() {
+    if (!this.storePath) return;
+    if (!fs.existsSync(this.storePath)) return;
+    fs.rmSync(this.storePath, { force: true });
+  }
+
   // 从 demo.ts 读取 demoData（TS 文件里导出的数组），用于初始化向量库示例数据
   private loadDemoDataFromTsFile(filePath: string): any[] {
     const raw = fs.readFileSync(filePath, "utf-8");
@@ -52,6 +58,25 @@ export class RagService implements OnModuleInit {
     return demoData;
   }
 
+  private normalizeArrayInput(input: unknown): any[] {
+    if (Array.isArray(input)) return input;
+    if (input == null) return [];
+    return [input];
+  }
+
+  private async ingestArrayItems(items: any[], meta: { source: string }) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const text = JSON.stringify(item);
+      const topic = item?.topic;
+      await this.ragClient.ingestText(text, {
+        source: meta.source,
+        index: i,
+        topic: typeof topic === "string" ? topic : undefined,
+      });
+    }
+  }
+
   // 初始化：把 demo.ts 里每一条记录序列化成文本，逐条写入向量库
   // - metadata 带上 source/index/topic，便于检索结果追踪来源
   async initFromDemo(): Promise<{
@@ -59,26 +84,34 @@ export class RagService implements OnModuleInit {
     count: number;
     vectorStorePath: string;
   }> {
+    this.resetVectorStoreFile();
     const demoPath =
       process.env.RAG_DEMO_PATH ?? path.resolve(process.cwd(), "../demo.ts");
     const demoData = this.loadDemoDataFromTsFile(demoPath);
-    console.log("demoData", demoData);
-    for (let i = 0; i < demoData.length; i++) {
-      const item = demoData[i];
-      const text = JSON.stringify(item);
-      const topic = item?.topic;
-      await this.ragClient.ingestText(text, {
-        source: "demo.ts",
-        index: i,
-        topic: typeof topic === "string" ? topic : undefined,
-      });
-    }
+    await this.ingestArrayItems(demoData, { source: "demo.ts" });
 
     return {
       ok: true,
       count: demoData.length,
       vectorStorePath: this.storePath,
     };
+  }
+
+  async initFromJsonArray(input: unknown): Promise<{
+    ok: true;
+    count: number;
+    vectorStorePath: string;
+  }> {
+    this.resetVectorStoreFile();
+    const items = this.normalizeArrayInput(input);
+    await this.ingestArrayItems(items, { source: "init" });
+    return { ok: true, count: items.length, vectorStorePath: this.storePath };
+  }
+
+  async appendJsonArray(input: unknown): Promise<{ ok: true; count: number }> {
+    const items = this.normalizeArrayInput(input);
+    await this.ingestArrayItems(items, { source: "append" });
+    return { ok: true, count: items.length };
   }
 
   // 写入/追加：把文本切片 -> 对每个 chunk 做 embedding -> 写入本地 JSON 向量库文件
@@ -113,6 +146,13 @@ export class RagService implements OnModuleInit {
       systemPrompt,
       answerMode,
     });
+  }
+
+  async queryAsArray(question: string, config: Record<string, any> = {}) {
+    const result = await this.query(question, config);
+    if (result.usedConfig.answerMode === "none") return result.documents;
+    if (typeof result.answer === "string" && result.answer) return [result.answer];
+    return [];
   }
 
   // 兼容旧命名：对外仍保留历史方法名，内部转发到语义化方法

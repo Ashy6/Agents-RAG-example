@@ -1,0 +1,17 @@
+name = "agents-rag"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+VOLCENGINE_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+VOLCENGINE_CHAT_MODEL = "gpt-4"
+VOLCENGINE_EMBEDDING_MODEL = "embedding"
+RAG_VECTOR_STORE_KEY = "vector_store.json"
+
+[durable_objects]
+bindings = [{ name = "VECTOR_STORE_DO", class_name = "VectorStoreDO" }]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["VectorStoreDO"]

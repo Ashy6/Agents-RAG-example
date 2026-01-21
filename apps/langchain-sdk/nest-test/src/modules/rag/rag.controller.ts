@@ -17,8 +17,15 @@ export class RagController {
   }
 
   @Post("init")
-  async init() {
-    // 默认读取 ../demo.ts 的 demoData，并逐条写入向量库
+  async init(
+    @Body()
+    body?: {
+      data?: any[];
+    },
+  ) {
+    if (body && "data" in body) {
+      return this.ragService.initFromJsonArray(body.data);
+    }
     return this.ragService.initFromDemo();
   }
 
@@ -39,12 +46,15 @@ export class RagController {
   async append(
     @Body()
     body: {
-      // 追加文本内容（等价于 ingestText，但默认 source=append）
-      text: string;
+      data?: any[];
+      text?: string;
       metadata?: Record<string, any>;
     },
   ) {
-    return this.ragService.ingestText(body.text, {
+    if (Array.isArray(body.data)) {
+      return this.ragService.appendJsonArray(body.data);
+    }
+    return this.ragService.ingestText(body.text ?? "", {
       ...(body.metadata ?? {}),
       source: (body.metadata?.source ?? "append") as any,
     });
@@ -60,7 +70,7 @@ export class RagController {
       config?: Record<string, any>;
     },
   ) {
-    return this.ragService.query(body.question, body.config ?? {});
+    return this.ragService.queryAsArray(body.question, body.config ?? {});
   }
 
   @Post("ask")
@@ -72,6 +82,6 @@ export class RagController {
       config?: Record<string, any>;
     },
   ) {
-    return this.ragService.query(body.question, body.config ?? {});
+    return this.ragService.queryAsArray(body.question, body.config ?? {});
   }
 }

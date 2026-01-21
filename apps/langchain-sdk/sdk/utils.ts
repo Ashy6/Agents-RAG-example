@@ -1,5 +1,3 @@
-import { createHash, randomUUID } from "crypto";
-
 export function chunkText(
   input: string,
   chunkSize: number,
@@ -39,12 +37,39 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
+function fnv1aHex(input: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 export function sha256(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
+  return fnv1aHex(input);
 }
 
 export function newId(): string {
-  return randomUUID();
+  const g: any = globalThis as any;
+  if (g?.crypto?.randomUUID) return g.crypto.randomUUID();
+  const rnd = () => Math.floor(Math.random() * 0xffffffff);
+  const a = rnd();
+  const b = rnd();
+  const c = rnd();
+  const d = rnd();
+  return (
+    a.toString(16).padStart(8, "0") +
+    "-" +
+    (b >>> 16).toString(16).padStart(4, "0") +
+    "-" +
+    (b & 0xffff).toString(16).padStart(4, "0") +
+    "-" +
+    (c >>> 16).toString(16).padStart(4, "0") +
+    "-" +
+    (c & 0xffff).toString(16).padStart(4, "0") +
+    d.toString(16).padStart(8, "0")
+  );
 }
 
 export function extractKeywords(text: string): string[] {
@@ -78,4 +103,3 @@ export function keywordScore(query: string, text: string): number {
   }
   return hit / q.length;
 }
-

@@ -7,7 +7,14 @@ import type {
   RagQueryResult,
   RetrievalDocument,
 } from "./types";
-import { loadStore, resolveStorePath, saveStore, type JsonVectorStore } from "./vectorStore";
+import {
+  createNodeFsStorage,
+  loadStore,
+  resolveStorePath,
+  saveStore,
+  type JsonVectorStore,
+  type VectorStoreStorage,
+} from "./vectorStore";
 import { chunkText, cosineSimilarity, keywordScore, newId, sha256 } from "./utils";
 
 function toStoreSafeName(value: string) {
@@ -31,6 +38,7 @@ function buildExtractiveAnswer(documents: RetrievalDocument[]): string {
 
 export class RagClient {
   private readonly vectorStorePath: string;
+  private readonly vectorStoreStorage: VectorStoreStorage;
   private readonly client: OpenAICompatibleClient;
   private readonly defaultChunkSize: number;
   private readonly defaultChunkOverlap: number;
@@ -47,6 +55,7 @@ export class RagClient {
       `vector_store.${toStoreSafeName(embeddingModel)}.json`;
 
     this.vectorStorePath = resolveStorePath(vectorStorePath);
+    this.vectorStoreStorage = options.vectorStoreStorage ?? createNodeFsStorage();
 
     const mock = options.mock ?? (!apiKey || apiKey === "your_api_key");
     this.mock = mock;
@@ -77,7 +86,7 @@ export class RagClient {
     const chunks = chunkText(text, chunkSize, chunkOverlap);
     if (chunks.length === 0) return { added: 0, skipped: 0 };
 
-    const existing = loadStore(this.vectorStorePath);
+    const existing = await loadStore(this.vectorStoreStorage, this.vectorStorePath);
     let store: JsonVectorStore;
     if (existing) {
       store = existing;
@@ -116,7 +125,7 @@ export class RagClient {
       added++;
     }
 
-    saveStore(this.vectorStorePath, store);
+    await saveStore(this.vectorStoreStorage, this.vectorStorePath, store);
     return { added, skipped };
   }
 
@@ -134,7 +143,7 @@ export class RagClient {
         "你是一个严谨的 RAG 助手。你必须仅基于给定上下文回答；如果上下文不足，请直接回答“我不知道”。",
     } as const;
 
-    const store = loadStore(this.vectorStorePath);
+    const store = await loadStore(this.vectorStoreStorage, this.vectorStorePath);
     if (!store || store.items.length === 0) {
       return { documents: [], usedConfig: resolved };
     }
