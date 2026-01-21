@@ -14,4 +14,4 @@ bindings = [{ name = "VECTOR_STORE_DO", class_name = "VectorStoreDO" }]
 
 [[migrations]]
 tag = "v1"
-new_classes = ["VectorStoreDO"]
+new_sqlite_classes = ["VectorStoreDO"]
