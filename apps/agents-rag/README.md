@@ -8,15 +8,44 @@
 
 向量库存储不落本地文件，默认通过 Durable Object 的 `state.storage` 持久化一份向量库 JSON（等价于把 `vector_store.json` 存到 DO 里）。
 
-入口实现见 [src/index.ts](file:///Users/ashy/Documents/code/mastra-rag-demo/apps/agents-rag/src/index.ts)。
+入口实现见 [src/index.ts](src/index.ts)。
 
 ## 接口约定
 
-- 请求/响应均为 JSON
-- 已开启 CORS（`access-control-allow-origin: *`）
-- 查询接口支持 `answerMode`：
+- 请求/响应均为 JSON（响应 `content-type: application/json; charset=utf-8`）
+- 已开启 CORS（`access-control-allow-origin: *`，允许 `GET,POST,OPTIONS`）
+- 预检：任意路径 `OPTIONS` 返回 `{ "ok": true }`
+- `/rag/init`、`/rag/append` 的入库数据支持两种写法：
+  - `data: [...]` 或 `documents: [...]`
+  - 也支持单对象（后端会自动包一层数组）
+- `/rag/query`、`/rag/ask` 支持两种问题字段：`question` 或 `query`
+- 查询接口 `answerMode` 约定：
   - `answerMode: "none"`：返回 `documents[]`
-  - 其它（如 `"extractive"` / `"llm"`）：返回 `[answer]`（数组里只有一条字符串）
+  - `answerMode: "llm"`（默认）或其它值：优先返回 `[answer]`（数组里只有一条字符串）；若没有 answer 则返回 `documents[]` 或 `[]`
+- `answerMode` 兼容别名（便于前端统一约定）：
+  - `answerMode: "documents"`：等价于 `"none"`
+  - `answerMode: "answer"`：等价于 `"llm"`
+- `topK` 兼容：如请求里传了 `topK`，后端会把它展开为 `semanticTopK/keywordTopK/hybridTopK`（缺省项才会填充）
+
+## 错误响应
+
+除 `GET /rag/health` 外，其它接口在异常时统一返回：
+
+```json
+{
+  "ok": false,
+  "error": "错误信息字符串",
+  "vectorStoreKey": "vector_store.json",
+  "hint": "可选：诊断/修复提示"
+}
+```
+
+常见 HTTP 状态码：
+
+- `400`：请求参数不合法；模型/接入点不存在；OpenAI Compatible 返回 404 等
+- `401`：鉴权失败（如 API Key 不正确/缺失且未开启 mock）
+- `409`：向量维度不匹配（同一个向量库 key 写入过不同 embedding 维度的数据）
+- `500`：其它未分类错误
 
 ## Base URL
 
@@ -33,8 +62,14 @@
 ```json
 {
   "ok": true,
+  "vectorStoreKeyBase": "vector_store.json",
   "vectorStoreKey": "vector_store.json",
-  "hasStorage": true
+  "vectorStoreKeyMock": "vector_store.mock.json",
+  "hasStorage": true,
+  "hasApiKey": true,
+  "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+  "chatModel": "ep-xxxx",
+  "embeddingModel": "ep-xxxx"
 }
 ```
 
@@ -52,9 +87,26 @@
   "data": [
     { "topic": "香蕉", "description": "香蕉口感软糯" },
     { "topic": "梨子", "description": "梨子水分含量高" }
-  ]
+  ],
+  "vectorStoreKey": "vector_store.json",
+  "mock": false
 }
 ```
+
+也支持 `documents` 字段与“单对象”写法（后端会当成数组长度 1）：
+
+```json
+{
+  "documents": { "topic": "香蕉", "description": "香蕉口感软糯" }
+}
+```
+
+请求字段说明：
+
+- `data` / `documents`：待入库的 JSON 对象数组（或单对象）；后端会对每条记录执行 `JSON.stringify` 后入库
+- `vectorStoreKey` / `key`：可选，覆盖默认向量库 key（用于多租户/多环境隔离）
+- `mock`：可选，`true` 走 mock 模式（不需要 VOLCENGINE_API_KEY；默认会写入 `*.mock.json` 避免污染真实库）
+- `mockEmbeddingDimension`：可选，仅在 `mock: true` 时生效，指定 mock embedding 维度（用于复现/规避维度不匹配问题）
 
 **Response**  
 
@@ -76,7 +128,9 @@
 {
   "data": [
     { "topic": "草莓", "description": "草莓香甜多汁" }
-  ]
+  ],
+  "vectorStoreKey": "vector_store.json",
+  "mock": false
 }
 ```
 
@@ -98,6 +152,8 @@
 ```json
 {
   "question": "香蕉是什么？",
+  "vectorStoreKey": "vector_store.json",
+  "mock": false,
   "config": {
     "answerMode": "none",
     "similarityThreshold": 0.35,
@@ -120,10 +176,20 @@
 }
 ```
 
-其中 `answerMode` 额外兼容别名：
+请求字段说明：
 
-- `answerMode: "documents"`：等价于 SDK 的 `answerMode: "none"`（只返回 documents）
-- `answerMode: "answer"`：等价于 SDK 的 `answerMode: "llm"`（返回 answer）
+- `question` / `query`：必填，问题文本
+- `config`：可选，透传给 SDK 的查询配置；也支持把配置字段直接放到顶层（后端会自动合并）
+- `answerMode`：可选，见“接口约定”，缺省等价于 `"llm"`（会触发 chat 模型调用）
+- `topK`：可选，兼容字段，会展开到 `semanticTopK/keywordTopK/hybridTopK`
+- `vectorStoreKey` / `key`：可选，覆盖默认向量库 key
+- `mock`：可选，`true` 走 mock 模式（无须 VOLCENGINE_API_KEY）
+- `mockEmbeddingDimension`：可选，仅 `mock: true` 生效
+
+响应说明：
+
+- `answerMode = "none"`：直接返回 `documents[]`
+- `answerMode != "none"`：优先返回 `[answer]`；无 answer 时返回 `documents[]` 或 `[]`
 
 **Response（answerMode = "none"）**
 
@@ -154,12 +220,18 @@
 
 ## 配置（环境变量 / wrangler vars & secrets）
 
-在 [wrangler.toml](file:///Users/ashy/Documents/code/mastra-rag-demo/apps/agents-rag/wrangler.toml) 中使用变量：
+在 [wrangler.toml](wrangler.toml) 中使用变量：
 
 - `VOLCENGINE_BASE_URL`：OpenAI Compatible Base URL（默认火山 Ark v3）
 - `VOLCENGINE_CHAT_MODEL`：聊天模型
 - `VOLCENGINE_EMBEDDING_MODEL`：embedding 模型
 - `RAG_VECTOR_STORE_KEY`：向量库 key（默认 `vector_store.json`）
+- `VECTOR_STORE_DO`：Workers 环境绑定的 Durable Object Namespace（用于持久化向量库；未绑定时本地会退化为内存 Map）
+
+火山方舟（`VOLCENGINE_BASE_URL` 包含 `volces.com`）会额外做配置校验：
+
+- `VOLCENGINE_EMBEDDING_MODEL` 必须是 embedding 接入点 ID（形如 `ep-xxxx`）
+- 当查询需要生成回答（`answerMode = "llm"`，默认）时，`VOLCENGINE_CHAT_MODEL` 也必须是 chat 接入点 ID（形如 `ep-xxxx`）
 
 建议用 secret 配置：
 

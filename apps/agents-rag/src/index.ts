@@ -27,6 +27,73 @@ function json(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), { ...init, headers });
 }
 
+function isVolcengineBaseUrl(baseUrl: string) {
+  return /volces\.com/i.test(baseUrl);
+}
+
+function looksLikeVolcengineEndpointId(model: string) {
+  return typeof model === "string" && /^ep-[a-z0-9_-]+/i.test(model.trim());
+}
+
+function pickStatusFromErrorMessage(message: string) {
+  if (/Embedding dimension mismatch:\s*store=\d+,\s*got=\d+/i.test(message)) return 409;
+  if (/Embeddings request failed:\s*404/i.test(message)) return 400;
+  if (/Chat request failed:\s*404/i.test(message)) return 400;
+  if (/InvalidEndpointOrModel\.NotFound/i.test(message)) return 400;
+  if (/Unauthorized|invalid api key|api key/i.test(message)) return 401;
+  return 500;
+}
+
+function toMockStoreKey(baseKey: string) {
+  const trimmed = String(baseKey ?? "").trim() || "vector_store.json";
+  if (trimmed.endsWith(".mock.json")) return trimmed;
+  if (trimmed.endsWith(".json")) return trimmed.replace(/\.json$/i, ".mock.json");
+  return `${trimmed}.mock.json`;
+}
+
+function requireVolcengineConfig(params: {
+  hasApiKey: boolean;
+  baseUrl: string;
+  chatModel: string;
+  embeddingModel: string;
+  needChat: boolean;
+}) {
+  if (!params.hasApiKey) {
+    return {
+      ok: false,
+      status: 400,
+      error:
+        "缺少 VOLCENGINE_API_KEY（请用 wrangler secret 配置；或请求体加 mock: true 走 mock 模式）",
+    };
+  }
+
+  if (isVolcengineBaseUrl(params.baseUrl)) {
+    if (!looksLikeVolcengineEndpointId(params.embeddingModel)) {
+      return {
+        ok: false,
+        status: 400,
+        error:
+          `VOLCENGINE_EMBEDDING_MODEL 配置无效（当前: ${JSON.stringify(
+            params.embeddingModel,
+          )}），火山方舟需要填 embedding 接入点 ID（例如 ep-xxxx）`,
+      };
+    }
+
+    if (params.needChat && !looksLikeVolcengineEndpointId(params.chatModel)) {
+      return {
+        ok: false,
+        status: 400,
+        error:
+          `VOLCENGINE_CHAT_MODEL 配置无效（当前: ${JSON.stringify(
+            params.chatModel,
+          )}），火山方舟需要填 chat 接入点 ID（例如 ep-xxxx）`,
+      };
+    }
+  }
+
+  return null;
+}
+
 // 允许请求体既支持 data: []，也支持单对象（会包一层数组）
 function normalizeArrayInput(input: unknown): any[] {
   if (Array.isArray(input)) return input;
@@ -78,7 +145,10 @@ function storage(env: Env) {
 
 // 构造 RagClient（SDK 核心能力：embedding / ingest / retrieval / 可选 LLM 生成）
 // 关键点：vectorStoreStorage 注入为 DO Storage，从而让 SDK 在 Workers 里可用
-function buildClient(env: Env, opts: { mock?: boolean } = {}) {
+function buildClient(
+  env: Env,
+  opts: { mock?: boolean; vectorStoreKey?: string; mockEmbeddingDimension?: number } = {},
+) {
   const pEnv = ((globalThis as any).process?.env ?? {}) as Record<string, string | undefined>;
   const read = (k: keyof Env | string) => (env as any)?.[k] ?? pEnv?.[String(k)];
 
@@ -87,7 +157,10 @@ function buildClient(env: Env, opts: { mock?: boolean } = {}) {
   const baseUrl = read("VOLCENGINE_BASE_URL") ?? "https://ark.cn-beijing.volces.com/api/v3";
   const chatModel = read("VOLCENGINE_CHAT_MODEL") ?? "gpt-4";
   const embeddingModel = read("VOLCENGINE_EMBEDDING_MODEL") ?? "embedding";
-  const key = read("RAG_VECTOR_STORE_KEY") ?? "vector_store.json";
+  const baseKey = read("RAG_VECTOR_STORE_KEY") ?? "vector_store.json";
+  const key =
+    (typeof opts.vectorStoreKey === "string" && opts.vectorStoreKey.trim()) ||
+    (opts.mock ? toMockStoreKey(baseKey) : baseKey);
   const hasApiKey = Boolean(apiKeyRaw && apiKeyRaw.trim() && apiKeyRaw !== "your_api_key");
 
   return {
@@ -99,8 +172,13 @@ function buildClient(env: Env, opts: { mock?: boolean } = {}) {
       vectorStorePath: key,
       vectorStoreStorage: storage(env),
       mock: Boolean(opts.mock),
+      mockEmbeddingDimension:
+        typeof opts.mockEmbeddingDimension === "number" && Number.isFinite(opts.mockEmbeddingDimension)
+          ? Math.max(1, Math.floor(opts.mockEmbeddingDimension))
+          : undefined,
     }),
     key,
+    baseKey,
     hasApiKey,
     baseUrl,
     chatModel,
@@ -138,6 +216,7 @@ async function ingestArray(client: RagClient, items: any[], meta: { source: stri
 export default {
   // Workers 入口：路由分发 + 调用 RagClient 完成 init/append/query
   async fetch(request: Request, env: Env) {
+    let activeVectorStoreKey: string | undefined;
     try {
       if (request.method === "OPTIONS") return json({ ok: true });
 
@@ -145,10 +224,12 @@ export default {
       const pathname = url.pathname;
 
       if (request.method === "GET" && pathname === "/rag/health") {
-        const { key, hasApiKey, baseUrl, chatModel, embeddingModel } = buildClient(env);
+        const { key, baseKey, hasApiKey, baseUrl, chatModel, embeddingModel } = buildClient(env);
         return json({
           ok: true,
+          vectorStoreKeyBase: baseKey,
           vectorStoreKey: key,
+          vectorStoreKeyMock: toMockStoreKey(baseKey),
           hasStorage: Boolean(env.VECTOR_STORE_DO),
           hasApiKey,
           baseUrl,
@@ -161,17 +242,52 @@ export default {
         return json({ ok: false, error: "Method Not Allowed" }, { status: 405 });
 
       const body = (await readJson(request)) as any;
-      const { client, key } = buildClient(env, { mock: Boolean(body?.mock) });
+      const useMock = Boolean(body?.mock);
+      const vectorStoreKeyOverride =
+        typeof body?.vectorStoreKey === "string"
+          ? body.vectorStoreKey
+          : typeof body?.key === "string"
+            ? body.key
+            : undefined;
+      const mockEmbeddingDimension =
+        typeof body?.mockEmbeddingDimension === "number" ? body.mockEmbeddingDimension : undefined;
+
+      const { client, key, hasApiKey, baseUrl, chatModel, embeddingModel } = buildClient(env, {
+        mock: useMock,
+        vectorStoreKey: vectorStoreKeyOverride,
+        mockEmbeddingDimension,
+      });
+      activeVectorStoreKey = key;
 
       if (pathname === "/rag/init") {
-        await storage(env).delete(key);
-        const items = normalizeArrayInput(body?.data);
+        if (!useMock) {
+          const err = requireVolcengineConfig({
+            hasApiKey,
+            baseUrl,
+            chatModel,
+            embeddingModel,
+            needChat: false,
+          });
+          if (err) return json({ ok: false, error: err.error }, { status: err.status });
+        }
+        await storage(env).delete(client.getStorePath());
+        const items = normalizeArrayInput(body?.data ?? body?.documents);
         await ingestArray(client, items, { source: "init" });
         return json({ ok: true, count: items.length, vectorStoreKey: key });
       }
 
       if (pathname === "/rag/append") {
-        const items = normalizeArrayInput(body?.data);
+        if (!useMock) {
+          const err = requireVolcengineConfig({
+            hasApiKey,
+            baseUrl,
+            chatModel,
+            embeddingModel,
+            needChat: false,
+          });
+          if (err) return json({ ok: false, error: err.error }, { status: err.status });
+        }
+        const items = normalizeArrayInput(body?.data ?? body?.documents);
         await ingestArray(client, items, { source: "append" });
         return json({ ok: true, count: items.length });
       }
@@ -187,6 +303,25 @@ export default {
         const rawAnswerMode = config.answerMode;
         if (rawAnswerMode === "documents") config.answerMode = "none";
         if (rawAnswerMode === "answer") config.answerMode = "llm";
+        if (typeof config.topK === "number" && Number.isFinite(config.topK)) {
+          const k = Math.max(1, Math.floor(config.topK));
+          if (config.semanticTopK == null) config.semanticTopK = k;
+          if (config.keywordTopK == null) config.keywordTopK = k;
+          if (config.hybridTopK == null) config.hybridTopK = k;
+          delete config.topK;
+        }
+
+        if (!useMock) {
+          const needChat = (config.answerMode ?? "llm") === "llm";
+          const err = requireVolcengineConfig({
+            hasApiKey,
+            baseUrl,
+            chatModel,
+            embeddingModel,
+            needChat,
+          });
+          if (err) return json({ ok: false, error: err.error }, { status: err.status });
+        }
 
         const result = await client.query(question, config);
 
@@ -199,7 +334,19 @@ export default {
       return json({ ok: false, error: "Not Found" }, { status: 404 });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return json({ ok: false, error: message }, { status: 500 });
+      const status = pickStatusFromErrorMessage(message);
+      const dimMatch = message.match(/Embedding dimension mismatch:\s*store=(\d+),\s*got=(\d+)/i);
+      const hint =
+        dimMatch
+          ? `向量库 key=${JSON.stringify(
+              activeVectorStoreKey ?? "",
+            )} 的向量维度为 ${dimMatch[1]}，但当前 embedding 输出维度为 ${dimMatch[2]}。` +
+            `请用真实模式重新 /rag/init 重建该 key 的向量库，或使用不同的 vectorStoreKey（mock 默认会使用 *.mock.json 避免污染）。`
+          : undefined;
+      return json(
+        { ok: false, error: message, vectorStoreKey: activeVectorStoreKey, hint },
+        { status },
+      );
     }
   },
 };
