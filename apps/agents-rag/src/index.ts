@@ -79,11 +79,14 @@ function storage(env: Env) {
 // 构造 RagClient（SDK 核心能力：embedding / ingest / retrieval / 可选 LLM 生成）
 // 关键点：vectorStoreStorage 注入为 DO Storage，从而让 SDK 在 Workers 里可用
 function buildClient(env: Env) {
-  const apiKey = env.VOLCENGINE_API_KEY ?? "your_api_key";
-  const baseUrl = env.VOLCENGINE_BASE_URL ?? "https://ark.cn-beijing.volces.com/api/v3";
-  const chatModel = env.VOLCENGINE_CHAT_MODEL ?? "gpt-4";
-  const embeddingModel = env.VOLCENGINE_EMBEDDING_MODEL ?? "embedding";
-  const key = env.RAG_VECTOR_STORE_KEY ?? "vector_store.json";
+  const pEnv = ((globalThis as any).process?.env ?? {}) as Record<string, string | undefined>;
+  const read = (k: keyof Env | string) => (env as any)?.[k] ?? pEnv?.[String(k)];
+
+  const apiKey = read("VOLCENGINE_API_KEY") ?? "your_api_key";
+  const baseUrl = read("VOLCENGINE_BASE_URL") ?? "https://ark.cn-beijing.volces.com/api/v3";
+  const chatModel = read("VOLCENGINE_CHAT_MODEL") ?? "gpt-4";
+  const embeddingModel = read("VOLCENGINE_EMBEDDING_MODEL") ?? "embedding";
+  const key = read("RAG_VECTOR_STORE_KEY") ?? "vector_store.json";
 
   return {
     client: new RagClient({
@@ -159,11 +162,22 @@ export default {
 
     if (pathname === "/rag/query" || pathname === "/rag/ask") {
       // 查询：根据 answerMode 决定返回 documents[] 或 [answer]
-      const question = String(body?.question ?? "");
-      const config = (body?.config ?? {}) as Record<string, any>;
+      const question = String(body?.question ?? body?.query ?? "");
+
+      const rawConfig = (body?.config ?? body ?? {}) as Record<string, any>;
+      const config: Record<string, any> = { ...rawConfig };
+      delete config.question;
+      delete config.query;
+
+      const rawAnswerMode = config.answerMode;
+      if (rawAnswerMode === "documents") config.answerMode = "none";
+      if (rawAnswerMode === "answer") config.answerMode = "llm";
+
       const result = await client.query(question, config);
+
       if (result.usedConfig.answerMode === "none") return json(result.documents);
       if (typeof result.answer === "string" && result.answer) return json([result.answer]);
+      if (Array.isArray(result.documents) && result.documents.length) return json(result.documents);
       return json([]);
     }
 

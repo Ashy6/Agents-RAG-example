@@ -93,7 +93,7 @@
 
 检索查询接口。
 
-**Request**  
+**Request**
 
 ```json
 {
@@ -110,7 +110,22 @@
 }
 ```
 
-**Response（answerMode = "none"）**  
+也支持把参数放到顶层，以及把 `question` 写成 `query`（更贴近某些前端习惯）：
+
+```json
+{
+  "query": "香蕉是什么？",
+  "answerMode": "documents",
+  "topK": 5
+}
+```
+
+其中 `answerMode` 额外兼容别名：
+
+- `answerMode: "documents"`：等价于 SDK 的 `answerMode: "none"`（只返回 documents）
+- `answerMode: "answer"`：等价于 SDK 的 `answerMode: "llm"`（返回 answer）
+
+**Response（answerMode = "none"）**
 
 ```json
 [
