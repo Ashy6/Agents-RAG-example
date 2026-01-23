@@ -78,15 +78,17 @@ function storage(env: Env) {
 
 // 构造 RagClient（SDK 核心能力：embedding / ingest / retrieval / 可选 LLM 生成）
 // 关键点：vectorStoreStorage 注入为 DO Storage，从而让 SDK 在 Workers 里可用
-function buildClient(env: Env) {
+function buildClient(env: Env, opts: { mock?: boolean } = {}) {
   const pEnv = ((globalThis as any).process?.env ?? {}) as Record<string, string | undefined>;
   const read = (k: keyof Env | string) => (env as any)?.[k] ?? pEnv?.[String(k)];
 
-  const apiKey = read("VOLCENGINE_API_KEY") ?? "your_api_key";
+  const apiKeyRaw = read("VOLCENGINE_API_KEY");
+  const apiKey = apiKeyRaw ?? "your_api_key";
   const baseUrl = read("VOLCENGINE_BASE_URL") ?? "https://ark.cn-beijing.volces.com/api/v3";
   const chatModel = read("VOLCENGINE_CHAT_MODEL") ?? "gpt-4";
   const embeddingModel = read("VOLCENGINE_EMBEDDING_MODEL") ?? "embedding";
   const key = read("RAG_VECTOR_STORE_KEY") ?? "vector_store.json";
+  const hasApiKey = Boolean(apiKeyRaw && apiKeyRaw.trim() && apiKeyRaw !== "your_api_key");
 
   return {
     client: new RagClient({
@@ -96,8 +98,13 @@ function buildClient(env: Env) {
       embeddingModel,
       vectorStorePath: key,
       vectorStoreStorage: storage(env),
+      mock: Boolean(opts.mock),
     }),
     key,
+    hasApiKey,
+    baseUrl,
+    chatModel,
+    embeddingModel,
   };
 }
 
@@ -131,57 +138,69 @@ async function ingestArray(client: RagClient, items: any[], meta: { source: stri
 export default {
   // Workers 入口：路由分发 + 调用 RagClient 完成 init/append/query
   async fetch(request: Request, env: Env) {
-    if (request.method === "OPTIONS") return json({ ok: true });
+    try {
+      if (request.method === "OPTIONS") return json({ ok: true });
 
-    const url = new URL(request.url);
-    const pathname = url.pathname;
-    const { client, key } = buildClient(env);
+      const url = new URL(request.url);
+      const pathname = url.pathname;
 
-    if (request.method === "GET" && pathname === "/rag/health") {
-      return json({ ok: true, vectorStoreKey: key, hasStorage: Boolean(env.VECTOR_STORE_DO) });
+      if (request.method === "GET" && pathname === "/rag/health") {
+        const { key, hasApiKey, baseUrl, chatModel, embeddingModel } = buildClient(env);
+        return json({
+          ok: true,
+          vectorStoreKey: key,
+          hasStorage: Boolean(env.VECTOR_STORE_DO),
+          hasApiKey,
+          baseUrl,
+          chatModel,
+          embeddingModel,
+        });
+      }
+
+      if (request.method !== "POST")
+        return json({ ok: false, error: "Method Not Allowed" }, { status: 405 });
+
+      const body = (await readJson(request)) as any;
+      const { client, key } = buildClient(env, { mock: Boolean(body?.mock) });
+
+      if (pathname === "/rag/init") {
+        await storage(env).delete(key);
+        const items = normalizeArrayInput(body?.data);
+        await ingestArray(client, items, { source: "init" });
+        return json({ ok: true, count: items.length, vectorStoreKey: key });
+      }
+
+      if (pathname === "/rag/append") {
+        const items = normalizeArrayInput(body?.data);
+        await ingestArray(client, items, { source: "append" });
+        return json({ ok: true, count: items.length });
+      }
+
+      if (pathname === "/rag/query" || pathname === "/rag/ask") {
+        const question = String(body?.question ?? body?.query ?? "");
+
+        const rawConfig = (body?.config ?? body ?? {}) as Record<string, any>;
+        const config: Record<string, any> = { ...rawConfig };
+        delete config.question;
+        delete config.query;
+
+        const rawAnswerMode = config.answerMode;
+        if (rawAnswerMode === "documents") config.answerMode = "none";
+        if (rawAnswerMode === "answer") config.answerMode = "llm";
+
+        const result = await client.query(question, config);
+
+        if (result.usedConfig.answerMode === "none") return json(result.documents);
+        if (typeof result.answer === "string" && result.answer) return json([result.answer]);
+        if (Array.isArray(result.documents) && result.documents.length) return json(result.documents);
+        return json([]);
+      }
+
+      return json({ ok: false, error: "Not Found" }, { status: 404 });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return json({ ok: false, error: message }, { status: 500 });
     }
-
-    if (request.method !== "POST") return json({ ok: false, error: "Method Not Allowed" }, { status: 405 });
-
-    const body = (await readJson(request)) as any;
-
-    if (pathname === "/rag/init") {
-      // 初始化：先删向量库，再把 data[] 全量写入
-      await storage(env).delete(key);
-      const items = normalizeArrayInput(body?.data);
-      await ingestArray(client, items, { source: "init" });
-      return json({ ok: true, count: items.length, vectorStoreKey: key });
-    }
-
-    if (pathname === "/rag/append") {
-      // 追加：不删库，直接把 data[] 逐条写入
-      const items = normalizeArrayInput(body?.data);
-      await ingestArray(client, items, { source: "append" });
-      return json({ ok: true, count: items.length });
-    }
-
-    if (pathname === "/rag/query" || pathname === "/rag/ask") {
-      // 查询：根据 answerMode 决定返回 documents[] 或 [answer]
-      const question = String(body?.question ?? body?.query ?? "");
-
-      const rawConfig = (body?.config ?? body ?? {}) as Record<string, any>;
-      const config: Record<string, any> = { ...rawConfig };
-      delete config.question;
-      delete config.query;
-
-      const rawAnswerMode = config.answerMode;
-      if (rawAnswerMode === "documents") config.answerMode = "none";
-      if (rawAnswerMode === "answer") config.answerMode = "llm";
-
-      const result = await client.query(question, config);
-
-      if (result.usedConfig.answerMode === "none") return json(result.documents);
-      if (typeof result.answer === "string" && result.answer) return json([result.answer]);
-      if (Array.isArray(result.documents) && result.documents.length) return json(result.documents);
-      return json([]);
-    }
-
-    return json({ ok: false, error: "Not Found" }, { status: 404 });
   },
 };
 
